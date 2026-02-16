@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>在线考试手写答题演示</title>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; }
+    .exam-paper { max-width: 800px; margin: 0 auto; background: #fff; padding: 40px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .question-block { margin-bottom: 40px; border-bottom: 1px dashed #eee; padding-bottom: 20px; }
+    .q-title { font-weight: bold; margin-bottom: 10px; font-size: 16px; }
+    .q-desc { margin-bottom: 15px; color: #555; }
+    .handwriting-area { width: 100%; border: 1px solid #ddd; border-radius: 4px; overflow: hidden; }
+    
+    .status-log { 
+      margin-top: 10px; padding: 10px; background: #e6ffed; 
+      border: 1px solid #b7eb8f; color: #28a745; display: none; font-size: 14px;
+    }
+
+    .submit-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #fff; padding: 15px; text-align: center;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    }
+    .btn-submit {
+      padding: 10px 30px; background: #1890ff; color: #fff;
+      border: none; border-radius: 4px; font-size: 16px; cursor: pointer;
+    }
+    .btn-submit:hover { background: #40a9ff; }
+  </style>
+</head>
+<body>
+
+<div class="exam-paper">
+  <h1 style="text-align: center; margin-bottom: 40px;">2024年秋季期末考试 - 数学卷</h1>
+
+  <!-- 第一题 -->
+  <div class="question-block" id="q1">
+    <div class="q-title">1. (10分) 请画出函数 y = x² 的图像，并标出顶点坐标。</div>
+    <div class="handwriting-area" id="board-q1"></div>
+    <div class="status-log" id="log-q1"></div>
+  </div>
+
+  <!-- 第二题 -->
+  <div class="question-block" id="q2">
+    <div class="q-title">2. (15分) 如图所示，物体在斜面上受力分析。请画出受力示意图并写出平衡方程。</div>
+    <div class="q-desc">（提示：使用“直线”工具画箭头，使用“文本”工具写公式）</div>
+    <div class="handwriting-area" id="board-q2"></div>
+    <div class="status-log" id="log-q2"></div>
+  </div>
+
+  <!-- 第三题 -->
+  <div class="question-block" id="q3">
+    <div class="q-title">3. (20分) 请默写《静夜思》全文。</div>
+    <div class="handwriting-area" id="board-q3"></div>
+    <div class="status-log" id="log-q3"></div>
+  </div>
+</div>
+
+<div class="submit-bar">
+  <button class="btn-submit" onclick="submitAll()">提交所有答案</button>
+</div>
+
+<!-- 引入插件 -->
+<script src="HandwritingBoard.js"></script>
+
+<script>
+  // 模拟数据库/OSS上传接口
+  function mockUploadToOSS(questionId, data) {
+    return new Promise((resolve) => {
+      console.log(`正在上传题目 [${questionId}] 的答案...`);
+      console.log('数据内容:', data); // 包含 history (JSON) 和 image (Base64)
+      
+      // 模拟网络延迟
+      setTimeout(() => {
+        resolve({ success: true, url: `https://oss.example.com/answers/${questionId}.png` });
+      }, 800);
+    });
+  }
+
+  // 初始化所有答题板
+  const boards = {};
+
+  // 题目1：数学图（用方格纸）
+  boards['q1'] = new HandwritingBoard('board-q1', { 
+    background: 'grid',
+    answerRows: 10,
+    lineHeight: 32,
+    // 实时保存回调 (可选)
+    onSave: (data) => {
+      console.log('Q1 自动保存中...');
+      localStorage.setItem('exam_q1', JSON.stringify(data));
+    }
+  });
+
+  // 题目2：物理图（用空白纸）
+  boards['q2'] = new HandwritingBoard('board-q2', { 
+    background: 'blank',
+    answerRows: 10,
+    lineHeight: 32
+  });
+
+  // 题目3：古诗（用横线纸）
+  boards['q3'] = new HandwritingBoard('board-q3', { 
+    background: 'line',
+    answerRows: 10,
+    lineHeight: 32
+  });
+
+  // 模拟加载上次的草稿 (断点续传)
+  const savedQ1 = localStorage.getItem('exam_q1');
+  if (savedQ1) {
+    boards['q1'].loadData(JSON.parse(savedQ1));
+    document.getElementById('log-q1').innerText = '已恢复上次的草稿';
+    document.getElementById('log-q1').style.display = 'block';
+  }
+
+  // 提交所有答案
+  async function submitAll() {
+    const btn = document.querySelector('.btn-submit');
+    btn.innerText = '正在提交...';
+    btn.disabled = true;
+
+    try {
+      for (const qId of Object.keys(boards)) {
+        const board = boards[qId];
+        const data = board.getData();
+        
+        // 如果这道题没写，跳过或提示
+        if (data.history.length === 0) {
+          console.warn(`题目 ${qId} 未作答`);
+          continue;
+        }
+
+        // 上传到服务器
+        const res = await mockUploadToOSS(qId, data);
+        
+        // 显示结果
+        const logEl = document.getElementById(`log-${qId}`);
+        logEl.innerHTML = `✅ 答案已保存! <a href="${data.image}" target="_blank">查看图片</a>`;
+        logEl.style.display = 'block';
+      }
+      alert('所有题目提交成功！');
+    } catch (e) {
+      alert('提交失败，请重试');
+      console.error(e);
+    } finally {
+      btn.innerText = '提交所有答案';
+      btn.disabled = false;
+    }
+  }
+</script>
+
+</body>
+</html>
